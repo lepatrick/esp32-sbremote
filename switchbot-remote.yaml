@@ -1,0 +1,116 @@
+# SwitchBot Universal Remote -> Home Assistant
+#
+# The ESP32 pairs with the remote over Bluetooth Classic as a HID host (device
+# type "Bluetooth Classic" in the SwitchBot app) and forwards every key press
+# to Home Assistant as an "esphome.switchbot_remote" event.
+#
+# Pairing: while nothing is paired yet, the ESP32 searches for the remote for
+# 10 minutes after boot. Later, use the "Start pairing" button.
+
+substitutions:
+  name: switchbot-remote
+  friendly_name: SwitchBot Remote
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32dev          # original ESP32 only (e.g. ESP32-WROOM-32): the S2/S3/C3/C6 have no Bluetooth Classic
+  framework:
+    type: esp-idf
+
+external_components:
+  - source: github://lepatrick/esp32-sbremote@main
+    components: [bt_classic_hid]
+  # When building from a checkout of this repository, use the local copy instead:
+  # - source:
+  #     type: local
+  #     path: components
+  #   components: [bt_classic_hid]
+
+logger:
+  level: INFO              # DEBUG additionally logs every raw HID report
+
+api:
+  homeassistant_services: true   # required for sending the key events to Home Assistant
+  encryption:
+    key: !secret switchbot_remote_api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# --- Bluetooth -------------------------------------------------------------
+
+bt_classic_hid:
+  id: remote
+  name: HA Bridge          # Bluetooth name of the ESP32, as seen by the remote
+  name_filter: SwitchBot   # pair only with devices whose name starts with this
+  on_key:
+    - homeassistant.event:
+        event: esphome.switchbot_remote
+        data:
+          key: !lambda 'return key;'
+          code: !lambda 'return code;'
+          action: !lambda 'return pressed ? "press" : "release";'
+    - if:
+        condition:
+          lambda: 'return pressed;'
+        then:
+          - text_sensor.template.publish:
+              id: last_key
+              state: !lambda 'return key;'
+  on_connect:
+    - binary_sensor.template.publish:
+        id: remote_connected
+        state: true
+  on_disconnect:
+    - binary_sensor.template.publish:
+        id: remote_connected
+        state: false
+
+# --- Entities --------------------------------------------------------------
+
+binary_sensor:
+  - platform: template
+    id: remote_connected
+    name: Connected
+    device_class: connectivity
+    entity_category: diagnostic
+  - platform: template
+    name: Pairing active
+    entity_category: diagnostic
+    lambda: 'return id(remote).is_pairing();'
+
+text_sensor:
+  - platform: template
+    id: last_key
+    name: Last key
+
+sensor:
+  - platform: wifi_signal
+    name: WiFi signal
+    update_interval: 60s
+    entity_category: diagnostic
+
+button:
+  - platform: restart
+    name: Restart
+    entity_category: config
+  - platform: template
+    name: Start pairing
+    icon: mdi:bluetooth-connect
+    entity_category: config
+    on_press:
+      - lambda: 'id(remote).start_pairing(180);'
+  - platform: template
+    name: Remove pairing
+    icon: mdi:bluetooth-off
+    entity_category: config
+    on_press:
+      - lambda: 'id(remote).remove_bonds();'

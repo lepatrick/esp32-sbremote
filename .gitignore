@@ -1,0 +1,10 @@
+# credentials and personal configuration - never commit
+.secrets
+secrets.yaml
+local/
+
+# build artefacts
+.esphome/
+.venv/
+__pycache__/
+tests/test_hid_report

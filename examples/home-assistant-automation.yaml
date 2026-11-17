@@ -1,0 +1,62 @@
+# Example Home Assistant automation: one automation handles all keys of the
+# remote. Every key is its own trigger with an id; add more as needed.
+# Replace the entity ids with your own.
+alias: SwitchBot Remote keys
+description: Key bindings of the SwitchBot Universal Remote (event esphome.switchbot_remote).
+mode: queued
+max: 10
+triggers:
+  - trigger: event
+    event_type: esphome.switchbot_remote
+    event_data: {key: REWIND, action: press}
+    id: rewind
+  - trigger: event
+    event_type: esphome.switchbot_remote
+    event_data: {key: PLAY_PAUSE, action: press}
+    id: play_pause
+  - trigger: event
+    event_type: esphome.switchbot_remote
+    event_data: {key: POWER, action: press}           # "ON" key
+    id: "on"
+  - trigger: event
+    event_type: esphome.switchbot_remote
+    event_data: {key: SLEEP, action: press}           # "OFF" key
+    id: "off"
+  - trigger: event
+    event_type: esphome.switchbot_remote
+    event_data: {key: VOLUME_UP, action: press}
+    id: plus
+  - trigger: event
+    event_type: esphome.switchbot_remote
+    event_data: {key: VOLUME_DOWN, action: press}
+    id: minus
+conditions: []
+actions:
+  - choose:
+      - conditions: [{condition: trigger, id: rewind}]
+        sequence:
+          - action: switch.toggle
+            target: {entity_id: switch.floor_lamp}
+      - conditions: [{condition: trigger, id: play_pause}]
+        sequence:
+          - action: light.toggle
+            target: {entity_id: light.tv_spots}
+      - conditions: [{condition: trigger, id: "on"}]
+        sequence:
+          - action: light.turn_on
+            target: {area_id: living_room}
+      - conditions: [{condition: trigger, id: "off"}]
+        sequence:
+          - action: light.turn_off
+            target: {area_id: living_room}
+      # Holding a key makes the remote repeat it, so these dim in steps.
+      - conditions: [{condition: trigger, id: plus}]
+        sequence:
+          - action: light.turn_on
+            target: {entity_id: light.dining_table}
+            data: {brightness_step_pct: 10}
+      - conditions: [{condition: trigger, id: minus}]
+        sequence:
+          - action: light.turn_on
+            target: {entity_id: light.dining_table}
+            data: {brightness_step_pct: -10}
